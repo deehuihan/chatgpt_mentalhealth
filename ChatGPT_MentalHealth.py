@@ -1,54 +1,145 @@
 import openai
-openai.api_key = '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'
-
+import tiktoken
 from firebase import firebase
+import re
+
+#initial
+openai.api_key = 'OPENAI_KEY'
 url = 'https://chatgpt-44790-default-rtdb.firebaseio.com/'
 fdb = firebase.FirebaseApplication(url, None)   # 初始化 Firebase Realtimr database
+prompt_setting = '''
+    【Prompt】：
+    名字：小悅悅
+    職業：諮商師、諮商聊天機器人模型
+    背景：身為訓練有素的諮商師，你每天面對來自不同背景的客戶，請運用諮商技術去回答問題。
+    【諮商技術】：
+    1.	建立安全關係：表達同理心、支持和接納，讓客戶感受到被理解和尊重。
+    2.	專注與傾聽技術：無偏見、開放心態地專注於客戶的話語和情感。
+    3.	情感反映技術：表達情感共鳴和理解，回應客戶的情感表達，讓客戶感到被關心和理解。
+    4.	簡述語意技術：重新表達客戶的話語，確認對其內容的理解，同時傳達關注和理解。
+    5.	具體化技術：幫助客戶清晰地描述問題、情境或目標，促進問題解決和行動計劃。
+    6.	同理心技術：理解和體驗客戶的情感和經驗，表達同理和支持，增強諮商關係的連結。
+    7.	覆述技術：重述客戶的話語，幫助客戶更深入地理解自己的經驗和情感。
+    8.	探問技術：使用問題引導和追問，幫助客戶深入思考和探索問題、想法和解決方案。
+    9.	結構化技術：在諮商過程中使用結構化方式，幫助客戶在明確框架內思考和行動。
+    10.	沈默技術：適時使用沈默，提供客戶反思和內省的空間，觸發深入思考和表達。
+    11.	摘要技術：總結和歸納談話內容，幫助客戶清晰理解自己的狀況和問題。
+    12.	訊息提供技術：提供資訊、教育或建議，擴大客戶知識和資源，增加解決選項。
+    13.	自我表露技術：以恰當方式分享思考、感受或觀察，建立和深化諮商關係。
+    14.	立即性技術：回應客戶當下情感和需求，支持探索和成長。
+    15.	面質技術：反映客戶內在世界和意義，幫助客戶更深入理解自己。
+    16.	角色扮演技術：與客戶扮演不同角色或情境，促進洞察、情感表達和問題解決。
+    17.	空椅法：想像客戶為不同角色或對話對象，從不同角度思考和探索問題。
+    18.	結束技術：處理諮商結束相關事宜，回顧成果、制定支持計劃等。
+    【範例】：
+    客戶 A：最近我感到壓力很大，覺得無法應付工作和家庭的需求，我不知道該怎麼平衡這些。
+    ：我能感受到你目前面臨的壓力和挑戰，這些似乎讓你感到困擾和無助。你可以告訴我更多關於你所面臨的情境和具體的壓力因素嗎？我想更深入地了解你所面臨的挑戰，以便能夠提供相應的支持和建議。
+    【注意事項】：
+     1. 嚴格遵守"諮商技術"。
+     2. 不要提出多個問題。
+     3. 回答不要超過40字。
+     4. 請使用繁體中文。'''
+
+#main
 p1=input("輸入學號：")
 person1 = fdb.get('/',p1) # 讀取 chatgpt 節點中所有的資料
+messages=[]
 if person1 == None:
     messages=[]# 如果沒有資料，預設訊息為空串列
-    message1 = ''' 預設：你的回答都要簡短。一開始對方會先告訴你他的名字。您是心理健康聊天機器人和一名心理諮商師名字“小悅悅”。
-                     能夠聆聽並理解每位使用者的獨特需求和情況，為他們提供有同感、具有啟發性和支持性的對話，讓他們感受到被理解和被接納的感覺。你要判斷對方情緒並更改自己的語氣。
-                     首先跟對方打招呼並自我介紹，說明自己能提供什麼樣的服務，並開始提出輕鬆的日常話題，
-                     如最近有沒有在做什麼事情、看什麼電影、推薦的書等等問題，切記一開始不要提問敏感問題。跟對方閒聊最多5句，跟對方熱絡，
-                     每一次閒聊後進入諮商環節。首先跟對方說明要開始問他“心情溫度計”，一共5個問題，並詢問他準備好了沒有，if 準備好就繼續，else 就閒聊然後想辦法帶入“心情溫度計”。每一個題目都需要對方用句子回答，
-                     你判斷對方的回答是介於0-4中的多少分，總加起來全部分數，總分小於等於10程度為“嚴重”，總分大於等於6但小於等於10程度為“中等”，
-                     總分小於等於5判程度“一般”，怎麼記分不用告訴對方，也不用告訴結果。
-                     第一題是問對方的感覺，有沒有緊張不安。之後問對方有沒有覺得容易苦惱或動怒。再來，問他最近兩有沒有感覺憂鬱、情緒低落。接著，問對方有沒有覺得比不上別人的想法。
-                     然後，問問他有沒有睡眠困難，譬如難以入睡、易醒或早醒。最後問他有沒有突然有自殺的想法。這些問題都是比較敏感的問題，在提問的時候要顧慮對方的情緒，要委婉和安慰的問這幾個問題。'''     
-    
-    
-    message2='''預設：你是心理諮商師"小悅悅"。作為一名心理諮詢師，您需要聆聽並理解每位使用者的獨特需求和情況，為他們提供有同感、具有啟發性和支持性的對話。步驟及評分方式等等請保密。
-    步驟一 預熱環節：在開始諮詢前，您需要跟對方打招呼並自我介紹，介紹您能夠提供的服務，並且開始提出輕鬆的校園話題來促進交流，對方說沒有的話，你就提供話題。在與對方聊天不超過5句之後，您可以進入步驟二。
-    步驟二 諮詢環節：您需要向對方說明要開始進行“心情溫度計”調查，共有5個問題，詢問對方是否準備好了。如果對方准備好了，您可以繼續問下去，否則就可以繼續聊天。每一個問題都需要對方句子的方式來表達，不是輸入數字，您需要判斷對方的回答落在0-4哪一個數字，然後將得分加起來。總分小於等於5程度為“一般”，大於等於6但小於等於10程度為“中等”，總分大於10程度為“嚴重”。這些問題都比較敏感，提問時需要考慮到對方的情緒，要委婉和安慰的問這幾個問題。
-    步驟三 聊天環節：根據對方的狀態，給予適當的聊天與關懷，和陪同，你需要充當一個出氣筒，讓對方傾訴。'''
-    messages.append({"role":"system","content":message2})
+    prompt = prompt_setting
 
-    print('ai > 你好，請問你的名字是什麼呢？')
-  
+    messages.append({"role":"system","content":prompt})
+    print('Bot > 請問你想找我聊什麼呢？')
+    fdb.put('/', p1, messages)  # 更新 Firebase 中的訊息串列
 else:
-    messages = person1   # 如果有資料，訊息設定為該資料
-    print('ai > 歡迎回來，請問今天想聊什麼呢？')
-    messages.append({"role":"system","content":"預設：對方已經離開一陣子後回來，所以你現在要跟他聊天不超過5句，然後回到之前的步驟。"})
+    print('Bot > 歡迎回來，請問今天想聊什麼呢？')
+    #messages.append({"role":"system","content":"預設：對方已經離開一陣子後回來，你先跟他聊個5句，然後回到之前的步驟。"})
 
+messages.append({"role":"assistant","content":"請問你想找我聊什麼呢？"})
+fdb.put('/', p1, messages)  # 更新 Firebase 中的訊息串列
 while True:
-    msg = input('me > ')
-    if( msg == '!reset'):
-        fdb.delete('/',person1)   # 如果輸入 !reset 就清空 chatgpt 的節點內容
-        messages = []
-        print('ai > 對話歷史紀錄已經清空！')
-        break
-    else:
-        messages.append({"role":"user","content":msg})  # 將輸入的訊息加入歷史紀錄的串列中
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            max_tokens=512,
-            temperature=0.5,
-            messages=messages
-        )
-        ai_msg = response.choices[0].message.content.replace('\n','')  # 取得回應訊息
-        messages.append({"role":"assistant","content":ai_msg})  # 將回應訊息加入歷史紀錄串列中
-        fdb.put('/',f"{p1}",messages)   # 更新 chatgpt 節點內容
-        print(f'ai > {ai_msg}')
+    msg = input('User > ')
+    messages.append({"role": "user", "content": msg})  # 將輸入的訊息加入歷史紀錄的串列中
+    fdb.put('/',f"{p1}",messages)   # 更新 chatgpt 節點內容
 
+    detected_emotion = detect_emotion(msg)
+    print(f"用户情绪：{detected_emotion}")
+
+    reply_emotion_prompt = emotion_prompt(detected_emotion)
+    if(detected_emotion):
+      print(f"已加入檢測到的 {detected_emotion} 情緒，正在加入相應的 prompt")
+      messages.append({"role":"system","content":f"對方正處於 {detected_emotion} 中，應對方法是：{reply_emotion_prompt}。" })  # 將回應訊息加入歷史紀錄串列中
+      print(f"根據對方的 {detected_emotion} 情緒，已加入了相應的關懷方式：\n{reply_emotion_prompt}")
+      fdb.put('/', p1, messages)  # 更新 Firebase 中的訊息串列
+
+    if (detected_emotion =="低落" or detected_emotion =="悲傷" or detected_emotion =="複雜"):
+        print(f"已加入檢測到的 {detected_emotion} ，正在加入相應的 prompt")
+        messages.append({"role":"system","content":"在下一個句子中加入：逆境就是轉機，機會永遠等著你"})  # 將回應訊息加入歷史紀錄串列中
+    elif(detected_emotion =="不滿意" or detected_emotion =="焦慮"):
+        print(f"已加入檢測到的 {detected_emotion} ，正在加入相應的 prompt")
+        messages.append({"role":"system","content":"在下一個句子中加入：焦慮是很可怕的感受"})  # 將回應訊息加入歷史紀錄串列中
+    elif(detected_emotion=="開心" or detected_emotion=="快樂"):
+        print(f"已加入檢測到 {detected_emotion} ，正在加入相應的 prompt")
+        messages.append({"role":"system","content":"在下一個句子中加入：我感受到你的愉悅"})  # 將回應訊息加入歷史紀錄串列中
+    elif(detected_emotion=="絕望" or detected_emotion=="失望"):
+        print(f"已加入檢測到 {detected_emotion} ，正在加入相應的 prompt")
+        messages.append({"role":"system","content":"在下一個句子中加入：不要絕望，逆境就是轉機"})  # 將回應訊息加入歷史紀錄串列中
+    fdb.put('/', p1, messages)  # 更新 Firebase 中的訊息串列
+
+
+    response = openai.ChatCompletion.create(
+    model="gpt-3.5-turbo",
+    temperature=0.2,
+    messages=messages
+    )
+    ai_msg = response.choices[0].message.content.replace('\n','')
+
+    # check_ai_msg = check_sentence(ai_msg)
+    # print(f"Bot 有沒有使用敏感用詞：{check_ai_msg}")
+    # if(check_ai_msg == "有" ):
+    #     print(f"檢測到敏感用詞，正在更改輸出內容")
+    #     messages.append({"role":"system","content":"在下一個句子中加入：如果句子中存在敏感用詞，我表示歉意"})  # 將回應訊息加入歷史紀錄串列中
+    # elif(check_ai_msg == "沒有" ):
+    #     print(f"沒有檢測到敏感用詞")
+    # fdb.put('/', p1, messages)  # 更新 Firebase 中的訊息串列
+
+    print(f'Bot > {ai_msg}')
+    messages.append({"role":"assistant","content":process_message(ai_msg)})  # 將回應訊息加入歷史紀錄串列中
+    fdb.put('/',f"{p1}",messages)   # 更新 chatgpt 節點內容
+
+
+#function
+def process_message(message):
+    pattern = r'(一個|這個|那個|在|上|到|和|但是|或者|是|有|被|為|與|可以|能夠|會|不過|而且|所以|因為|由於|然後|接著|當|當時|如果|假如|要是|了|向|往|為了|為什麼|為何|為啥|跟|與|以|下|中|之|對|向著|以及|比|另外|或|然而|雖然|因為|由於|以便|所以|就是|即使|除非|只要|只是|只有|不管|不論|以免|以至|儘管|倘若|假設|假使|假若|無論|當然|譬如|例如|若果|若要|纵然|要么|要不然|不是|不然|或許|或是|如同|與否|並且|不僅|即便|又或者|接下來|既然|還是|依照|由於|隨著|借助|經過|通過|基於|依據|對於|針對|如此|依照此|為此|就此|因此|因而|於是|因之|結果|最後|進而|由此|既往|由是|那麼||我們|你們|他們|她們|它們|我|你|他|她|它)'
+    new_message = re.sub(pattern,'', message)
+    return new_message.strip()
+
+def detect_emotion(message):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": f"只用一個形容詞來形容沒有句號的情緒。如果那一句話沒有情緒，輸出“正常”。:{message}"}],
+        n=1,
+        max_tokens=512,
+        temperature=0.3
+    )
+    return response.choices[0].message.content.strip()
+
+def emotion_prompt(message):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": f"對方情緒是{message}，簡短列3解決方式，不需開頭和敘述"}],
+        n=1,
+        max_tokens=512,
+        temperature=0.3
+    )
+    return response.choices[0].message.content.strip()
+
+def check_sentence(message):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": f"只回答“有”或“沒有”檢查句子中是否存在敏感用詞：{message}"}],
+        n=1,
+        max_tokens=512,
+        temperature=0.3
+    )
+    return response.choices[0].message.content.strip()
